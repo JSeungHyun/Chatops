@@ -31,7 +31,7 @@ server:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:your-secret-key}
+    secret: ${JWT_SECRET:chatops-jwt-secret-key-for-dev-32b}
     expiration: 604800000
   minio:
     endpoint: minio
