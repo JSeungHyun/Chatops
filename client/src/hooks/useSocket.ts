@@ -31,6 +31,7 @@ export function useSocket({
   const typingSubRef = useRef<StompSubscription | null>(null);
   const errorSubRef = useRef<StompSubscription | null>(null);
   const presenceSubRef = useRef<StompSubscription | null>(null);
+  const userMsgSubRef = useRef<StompSubscription | null>(null);
   const connectedRef = useRef(false);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -101,6 +102,20 @@ export function useSocket({
         }
       }, 3 * 60 * 1000);
 
+      // Subscribe to personal message queue for cross-room notifications
+      userMsgSubRef.current = stompSubscribe('/user/queue/messages', (frame) => {
+        try {
+          const msg = JSON.parse(frame.body) as { roomId: string; userId: string; content: string; createdAt: string; id: string; user: unknown };
+          const store = useChatStore.getState();
+          // Only update room list — current room messages are handled by room subscription
+          if (msg.roomId !== store.currentRoom?.id) {
+            store.updateRoomWithNewMessage(msg.roomId, msg as never);
+          }
+        } catch {
+          // ignore malformed frames
+        }
+      });
+
       // Subscribe to presence updates
       presenceSubRef.current = stompSubscribe('/topic/presence', (frame) => {
         try {
@@ -137,6 +152,8 @@ export function useSocket({
       errorSubRef.current = null;
       presenceSubRef.current?.unsubscribe();
       presenceSubRef.current = null;
+      userMsgSubRef.current?.unsubscribe();
+      userMsgSubRef.current = null;
       if (heartbeatRef.current) {
         clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
@@ -163,6 +180,8 @@ export function useSocket({
     errorSubRef.current = null;
     presenceSubRef.current?.unsubscribe();
     presenceSubRef.current = null;
+    userMsgSubRef.current?.unsubscribe();
+    userMsgSubRef.current = null;
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;

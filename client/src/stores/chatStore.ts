@@ -51,6 +51,7 @@ interface ChatState {
   clearTypingUsers: () => void;
   setOnlineUser: (userId: string, online: boolean) => void;
   setOnlineUsers: (statuses: Record<string, boolean>) => void;
+  updateRoomWithNewMessage: (roomId: string, message: Message) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -102,4 +103,22 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => ({
       onlineUsers: { ...state.onlineUsers, ...statuses },
     })),
+  updateRoomWithNewMessage: (roomId, message) =>
+    set((state) => {
+      const isCurrentRoom = state.currentRoom?.id === roomId;
+      return {
+        rooms: state.rooms.map((r) =>
+          r.id === roomId
+            ? {
+                ...r,
+                messages: [message],
+                updatedAt: message.createdAt,
+                unreadCount: isCurrentRoom
+                  ? (r.unreadCount ?? 0)
+                  : (r.unreadCount ?? 0) + 1,
+              }
+            : r,
+        ),
+      };
+    }),
 }));

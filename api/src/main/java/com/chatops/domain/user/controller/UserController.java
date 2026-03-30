@@ -32,8 +32,16 @@ public class UserController {
     }
 
     @GetMapping("/search")
-    public List<UserResponse> searchUsers(@RequestParam @Size(min = 2, max = 20) String nickname) {
-        return userService.searchByNickname(nickname);
+    public List<UserResponse> searchUsers(
+            @RequestParam(required = false) @Size(min = 2, max = 20) String nickname,
+            @RequestParam(required = false) @Size(min = 2, max = 50) String keyword) {
+        if (keyword != null) {
+            return userService.searchByKeyword(keyword);
+        }
+        if (nickname != null) {
+            return userService.searchByNickname(nickname);
+        }
+        return List.of();
     }
 
     @GetMapping("/{id}")

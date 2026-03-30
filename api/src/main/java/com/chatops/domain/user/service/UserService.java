@@ -31,6 +31,11 @@ public class UserService {
             .stream().map(UserResponse::from).toList();
     }
 
+    public List<UserResponse> searchByKeyword(String keyword) {
+        return userRepository.searchByKeyword(keyword, PageRequest.of(0, 20))
+            .stream().map(UserResponse::from).toList();
+    }
+
     @Transactional
     public UserResponse update(String id, UpdateUserRequest request) {
         User user = userRepository.findById(id)

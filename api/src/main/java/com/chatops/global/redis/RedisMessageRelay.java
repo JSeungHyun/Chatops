@@ -25,6 +25,8 @@ public class RedisMessageRelay implements MessageListener {
     private static final Pattern SAFE_DESTINATION = Pattern.compile(
         "^/topic/(room/[a-f0-9\\-]+(/typing)?|presence)$");
 
+    private static final String USER_MESSAGES_CHANNEL = "user-messages";
+
     private final SimpMessagingTemplate messagingTemplate;
     private final RedisService redisService;
     private final RedisMessageListenerContainer listenerContainer;
@@ -51,6 +53,9 @@ public class RedisMessageRelay implements MessageListener {
             // Subscribe to presence channel for cross-instance online/offline events
             listenerContainer.addMessageListener(this,
                     new ChannelTopic(RedisKeyConstants.PRESENCE_CHANNEL));
+            // Subscribe to user-messages channel for cross-instance personal queue relay
+            listenerContainer.addMessageListener(this,
+                    new ChannelTopic(USER_MESSAGES_CHANNEL));
             log.info("RedisMessageRelay initialized with serverId={}", serverId);
         } catch (Exception e) {
             log.warn("RedisMessageRelay: failed to subscribe to existing rooms on startup", e);
@@ -83,6 +88,24 @@ public class RedisMessageRelay implements MessageListener {
         }
     }
 
+    /**
+     * Publishes a message to a user's personal queue via Redis,
+     * so other instances can forward it to their local STOMP clients.
+     */
+    public void publishUserMessage(String userId, Object payload) {
+        try {
+            Map<String, Object> envelope = Map.of(
+                    "serverId", serverId,
+                    "userId", userId,
+                    "payload", payload
+            );
+            String json = objectMapper.writeValueAsString(envelope);
+            redisService.publish(USER_MESSAGES_CHANNEL, json);
+        } catch (Exception e) {
+            log.warn("RedisMessageRelay: publishUserMessage failed for userId={}", userId, e);
+        }
+    }
+
     public void publishToChannel(String destination, Object payload) {
         try {
             String channel = destinationToChannel(destination);
@@ -111,6 +134,15 @@ public class RedisMessageRelay implements MessageListener {
             String incomingServerId = (String) envelope.get("serverId");
             if (serverId.equals(incomingServerId)) {
                 // Skip messages published by this instance — already delivered locally
+                return;
+            }
+
+            // Handle user-messages channel (personal queue relay)
+            String userId = (String) envelope.get("userId");
+            if (userId != null) {
+                Object payload = envelope.get("payload");
+                messagingTemplate.convertAndSendToUser(userId, "/queue/messages", payload);
+                log.debug("RedisMessageRelay: forwarded user message to userId={}", userId);
                 return;
             }
 

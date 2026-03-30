@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { X } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Search } from 'lucide-react';
 import clsx from 'clsx';
 import api from '@/api/axios';
 import { useChatStore } from '@/stores/chatStore';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import type { ChatRoom, RoomType } from '@/types/chat';
+import type { User } from '@/types/user';
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -23,31 +24,74 @@ export function NewChatModal({ isOpen, onClose }: NewChatModalProps) {
 
   const [type, setType] = useState<RoomType>('DIRECT');
   const [groupName, setGroupName] = useState('');
-  const [memberInput, setMemberInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    if (searchQuery.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await api.get<User[]>('/users/search', {
+          params: { keyword: searchQuery },
+        });
+        // Exclude already selected users
+        const selectedIds = new Set(selectedUsers.map((u) => u.id));
+        setSearchResults(res.data.filter((u) => !selectedIds.has(u.id)));
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchQuery, selectedUsers]);
 
   if (!isOpen) return null;
 
   function handleClose() {
     setType('DIRECT');
     setGroupName('');
-    setMemberInput('');
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedUsers([]);
     setError(null);
     onClose();
+  }
+
+  function selectUser(user: User) {
+    if (type === 'DIRECT') {
+      setSelectedUsers([user]);
+    } else {
+      setSelectedUsers((prev) => [...prev, user]);
+    }
+    setSearchQuery('');
+    setSearchResults([]);
+  }
+
+  function removeUser(userId: string) {
+    setSelectedUsers((prev) => prev.filter((u) => u.id !== userId));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    const memberIds = memberInput
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    if (memberIds.length === 0) {
-      setError('최소 한 명의 사용자 ID를 입력해주세요.');
+    if (selectedUsers.length === 0) {
+      setError('대화할 사용자를 검색하여 선택해주세요.');
       return;
     }
 
@@ -56,6 +100,7 @@ export function NewChatModal({ isOpen, onClose }: NewChatModalProps) {
       return;
     }
 
+    const memberIds = selectedUsers.map((u) => u.id);
     const body: CreateRoomBody = { type, memberIds };
     if (type === 'GROUP') body.name = groupName.trim();
 
@@ -103,7 +148,12 @@ export function NewChatModal({ isOpen, onClose }: NewChatModalProps) {
                 <button
                   key={t}
                   type="button"
-                  onClick={() => setType(t)}
+                  onClick={() => {
+                    setType(t);
+                    if (t === 'DIRECT' && selectedUsers.length > 1) {
+                      setSelectedUsers([selectedUsers[0]]);
+                    }
+                  }}
                   className={clsx(
                     'flex-1 rounded-lg border py-2 text-sm font-medium transition-colors',
                     type === t
@@ -126,20 +176,70 @@ export function NewChatModal({ isOpen, onClose }: NewChatModalProps) {
             />
           )}
 
-          <Input
-            label="사용자 ID"
-            placeholder={
-              type === 'DIRECT'
-                ? '상대방 사용자 ID를 입력하세요'
-                : '사용자 ID를 쉼표로 구분하여 입력하세요'
-            }
-            value={memberInput}
-            onChange={(e) => setMemberInput(e.target.value)}
-          />
+          {/* Selected users */}
+          {selectedUsers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {selectedUsers.map((user) => (
+                <span
+                  key={user.id}
+                  className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700"
+                >
+                  {user.nickname}
+                  <button
+                    type="button"
+                    onClick={() => removeUser(user.id)}
+                    className="rounded-full p-0.5 hover:bg-primary-100"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
-          <p className="text-xs text-slate-400">
-            사용자 검색 기능은 추후 지원 예정입니다. 현재는 사용자 ID를 직접 입력해주세요.
-          </p>
+          {/* Search input */}
+          <div className="relative">
+            <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <Search size={16} />
+            </div>
+            <input
+              type="text"
+              placeholder="닉네임 또는 이메일로 검색"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            />
+
+            {/* Search results dropdown */}
+            {(searchResults.length > 0 || isSearching) && searchQuery.length >= 2 && (
+              <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                {isSearching ? (
+                  <div className="px-3 py-2 text-sm text-slate-400">검색 중...</div>
+                ) : searchResults.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-slate-400">검색 결과가 없습니다</div>
+                ) : (
+                  searchResults.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => selectUser(user)}
+                      className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-slate-50"
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-xs font-medium text-primary-700">
+                        {user.nickname.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-slate-900">
+                          {user.nickname}
+                        </p>
+                        <p className="truncate text-xs text-slate-400">{user.email}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 

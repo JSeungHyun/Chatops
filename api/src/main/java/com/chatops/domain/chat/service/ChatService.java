@@ -67,6 +67,17 @@ public class ChatService {
             log.warn("Creator userId {} was included in memberIds, deduplicated", userId);
         }
 
+        // Validate all member IDs exist
+        List<User> existingUsers = userRepository.findAllById(uniqueMemberIds);
+        if (existingUsers.size() != uniqueMemberIds.size()) {
+            Set<String> foundIds = existingUsers.stream().map(User::getId).collect(Collectors.toSet());
+            Set<String> notFound = uniqueMemberIds.stream()
+                .filter(id -> !foundIds.contains(id))
+                .collect(Collectors.toSet());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "존재하지 않는 사용자: " + notFound);
+        }
+
         List<ChatRoomMember> otherMembers = uniqueMemberIds.stream()
             .map(memberId -> ChatRoomMember.builder()
                 .userId(memberId)

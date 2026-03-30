@@ -4,6 +4,8 @@ import com.chatops.domain.chat.dto.ChatRoomResponse;
 import com.chatops.domain.chat.dto.MessageResponse;
 import com.chatops.domain.chat.dto.CreateRoomRequest;
 import com.chatops.domain.chat.dto.SendMessageRequest;
+import com.chatops.domain.chat.entity.ChatRoomMember;
+import com.chatops.domain.chat.repository.ChatRoomMemberRepository;
 import com.chatops.domain.chat.service.ChatService;
 import com.chatops.global.common.dto.PageResponse;
 import com.chatops.global.redis.RedisMessageRelay;
@@ -28,6 +30,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ChatController {
     private final ChatService chatService;
+    private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final RedisMessageRelay redisMessageRelay;
 
@@ -60,6 +63,17 @@ public class ChatController {
         MessageResponse response = chatService.sendMessage(user.getId(), id, request);
         messagingTemplate.convertAndSend("/topic/room/" + id, response);
         redisMessageRelay.publishToChannel("/topic/room/" + id, response);
+
+        // Send to each member's personal queue for cross-room notifications
+        List<ChatRoomMember> members = chatRoomMemberRepository.findByRoomId(id);
+        for (ChatRoomMember member : members) {
+            if (!member.getUserId().equals(user.getId())) {
+                messagingTemplate.convertAndSendToUser(
+                    member.getUserId(), "/queue/messages", response);
+                redisMessageRelay.publishUserMessage(
+                    member.getUserId(), response);
+            }
+        }
         return response;
     }
 
