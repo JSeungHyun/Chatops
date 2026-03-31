@@ -2,11 +2,10 @@ package com.chatops.domain.chat.controller;
 
 import com.chatops.domain.chat.dto.MessageResponse;
 import com.chatops.domain.chat.dto.SendMessageRequest;
+import com.chatops.domain.chat.dto.SendMessageResult;
 import com.chatops.domain.chat.dto.TypingEvent;
 import com.chatops.domain.chat.dto.WebSocketErrorResponse;
 import com.chatops.domain.chat.dto.WebSocketMessageRequest;
-import com.chatops.domain.chat.entity.ChatRoomMember;
-import com.chatops.domain.chat.repository.ChatRoomMemberRepository;
 import com.chatops.domain.chat.service.ChatService;
 import com.chatops.global.redis.RedisMessageRelay;
 import com.chatops.global.redis.RedisService;
@@ -21,7 +20,6 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -31,7 +29,6 @@ public class ChatWebSocketHandler {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatService chatService;
-    private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final RedisMessageRelay redisMessageRelay;
     private final RedisService redisService;
 
@@ -60,22 +57,18 @@ public class ChatWebSocketHandler {
         sendRequest.setType(request.getType());
         sendRequest.setFileUrl(request.getFileUrl());
 
-        MessageResponse messageResponse = chatService.sendMessage(userId, roomId, sendRequest);
+        SendMessageResult result = chatService.sendMessage(userId, roomId, sendRequest);
+        MessageResponse messageResponse = result.messageResponse();
         messagingTemplate.convertAndSend("/topic/room/" + roomId, messageResponse);
         redisMessageRelay.publishToChannel("/topic/room/" + roomId, messageResponse);
 
-        // Send to each member's personal queue for cross-room notifications
-        List<ChatRoomMember> members = chatRoomMemberRepository.findByRoomId(roomId);
-        for (ChatRoomMember member : members) {
-            if (!member.getUserId().equals(userId)) {
-                messagingTemplate.convertAndSendToUser(
-                    member.getUserId(), "/queue/messages", messageResponse);
-                redisMessageRelay.publishUserMessage(
-                    member.getUserId(), messageResponse);
-            }
+        // Send to each member's personal queue (reuses member list from service layer)
+        for (String memberId : result.notifyUserIds()) {
+            messagingTemplate.convertAndSendToUser(memberId, "/queue/messages", messageResponse);
+            redisMessageRelay.publishUserMessage(memberId, messageResponse);
         }
         log.debug("Message broadcast to /topic/room/{} and {} member queues: userId={}",
-            roomId, members.size() - 1, userId);
+            roomId, result.notifyUserIds().size(), userId);
     }
 
     @MessageMapping("/chat/{roomId}/typing")

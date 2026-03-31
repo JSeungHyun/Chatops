@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import clsx from 'clsx';
 import { FileText, Download } from 'lucide-react';
 import { Avatar } from '@/components/common/Avatar';
@@ -11,7 +12,7 @@ interface MessageBubbleProps {
   showTimestamp: boolean;
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   message,
   isOwn,
   showAvatar,
@@ -97,4 +98,4 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});

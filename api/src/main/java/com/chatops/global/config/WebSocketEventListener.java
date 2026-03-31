@@ -45,6 +45,7 @@ public class WebSocketEventListener {
         if (sessionAttributes != null) {
             String userId = (String) sessionAttributes.get("userId");
             if (userId != null) {
+                redisService.cleanupViewerOnDisconnect(userId);
                 redisService.setOffline(userId);
                 Map<String, Object> payload = Map.of("userId", userId, "online", false);
                 messagingTemplate.convertAndSend("/topic/presence", payload);

@@ -49,6 +49,9 @@ class AuthControllerTest {
     @MockBean
     private UserRepository userRepository;
 
+    @MockBean
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+
     @Test
     @DisplayName("POST /auth/register - 성공 200")
     void register_성공() throws Exception {

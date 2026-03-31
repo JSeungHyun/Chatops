@@ -78,9 +78,12 @@ class ChatServiceTest {
             TestFixture.createChatRoomMember("m-1", "user-1", "room-1"),
             TestFixture.createChatRoomMember("m-2", "user-2", "room-1")
         ));
-        given(userRepository.findAllById(anyCollection())).willReturn(List.of(
-            TestFixture.createUser(),
-            TestFixture.createUser("user-2", "user2@example.com", "user2")));
+        // First call: validate member IDs (excludes creator); second call: buildChatRoomResponse
+        given(userRepository.findAllById(anyCollection()))
+            .willReturn(List.of(TestFixture.createUser("user-2", "user2@example.com", "user2")))
+            .willReturn(List.of(
+                TestFixture.createUser(),
+                TestFixture.createUser("user-2", "user2@example.com", "user2")));
 
         ChatRoomResponse result = chatService.createRoom("user-1", request);
 
@@ -106,10 +109,15 @@ class ChatServiceTest {
             TestFixture.createChatRoomMember("m-2", "user-2", "room-1"),
             TestFixture.createChatRoomMember("m-3", "user-3", "room-1")
         ));
-        given(userRepository.findAllById(anyCollection())).willReturn(List.of(
-            TestFixture.createUser(),
-            TestFixture.createUser("user-2", "user2@example.com", "user2"),
-            TestFixture.createUser("user-3", "user3@example.com", "user3")));
+        // First call: validate member IDs (excludes creator); second call: buildChatRoomResponse
+        given(userRepository.findAllById(anyCollection()))
+            .willReturn(List.of(
+                TestFixture.createUser("user-2", "user2@example.com", "user2"),
+                TestFixture.createUser("user-3", "user3@example.com", "user3")))
+            .willReturn(List.of(
+                TestFixture.createUser(),
+                TestFixture.createUser("user-2", "user2@example.com", "user2"),
+                TestFixture.createUser("user-3", "user3@example.com", "user3")));
 
         ChatRoomResponse result = chatService.createRoom("user-1", request);
 
@@ -178,11 +186,11 @@ class ChatServiceTest {
         given(chatRoomRepository.save(any(ChatRoom.class))).willReturn(room);
         given(userRepository.findById("user-1")).willReturn(Optional.of(sender));
 
-        MessageResponse result = chatService.sendMessage("user-1", "room-1", request);
+        var result = chatService.sendMessage("user-1", "room-1", request);
 
-        assertThat(result.getContent()).isEqualTo("Hello");
-        assertThat(result.getUserId()).isEqualTo("user-1");
-        assertThat(result.getRoomId()).isEqualTo("room-1");
+        assertThat(result.messageResponse().getContent()).isEqualTo("Hello");
+        assertThat(result.messageResponse().getUserId()).isEqualTo("user-1");
+        assertThat(result.messageResponse().getRoomId()).isEqualTo("room-1");
     }
 
     @Test

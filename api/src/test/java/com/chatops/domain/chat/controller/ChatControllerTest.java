@@ -2,6 +2,7 @@ package com.chatops.domain.chat.controller;
 
 import com.chatops.domain.chat.dto.ChatRoomResponse;
 import com.chatops.domain.chat.dto.MessageResponse;
+import com.chatops.domain.chat.dto.SendMessageResult;
 import com.chatops.domain.chat.entity.RoomType;
 import com.chatops.domain.chat.service.ChatService;
 import com.chatops.domain.message.entity.MessageType;
@@ -62,6 +63,9 @@ class ChatControllerTest {
 
     @MockBean
     private UserRepository userRepository;
+
+    @MockBean
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
 
     private String setupAuth() {
         String token = "test-jwt-token";
@@ -148,7 +152,8 @@ class ChatControllerTest {
     @DisplayName("POST /chats/{id}/messages - 메시지 전송 200")
     void sendMessage_성공() throws Exception {
         String token = setupAuth();
-        given(chatService.sendMessage(eq("user-1"), eq("room-1"), any())).willReturn(sampleMessageResponse());
+        given(chatService.sendMessage(eq("user-1"), eq("room-1"), any()))
+            .willReturn(new SendMessageResult(sampleMessageResponse(), java.util.List.of()));
 
         mockMvc.perform(post("/chats/room-1/messages")
                 .header("Authorization", "Bearer " + token)

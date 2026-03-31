@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -183,6 +184,10 @@ public class RedisService {
             String key = RedisKeyConstants.roomViewers(roomId);
             redisTemplate.opsForSet().add(key, userId);
             redisTemplate.expire(key, Duration.ofSeconds(RedisKeyConstants.ROOM_VIEWERS_TTL));
+            // Track which room this user is viewing (for disconnect cleanup)
+            redisTemplate.opsForValue().set(
+                RedisKeyConstants.userViewing(userId), roomId,
+                Duration.ofSeconds(RedisKeyConstants.ROOM_VIEWERS_TTL));
         } catch (RedisConnectionFailureException e) {
             log.warn("Redis unavailable: addViewer failed for roomId={}, userId={}", roomId, userId);
         }
@@ -191,8 +196,44 @@ public class RedisService {
     public void removeViewer(String roomId, String userId) {
         try {
             redisTemplate.opsForSet().remove(RedisKeyConstants.roomViewers(roomId), userId);
+            redisTemplate.delete(RedisKeyConstants.userViewing(userId));
         } catch (RedisConnectionFailureException e) {
             log.warn("Redis unavailable: removeViewer failed for roomId={}, userId={}", roomId, userId);
+        }
+    }
+
+    /** Atomic Lua script: GET viewing room → SREM from viewers → DEL viewing key */
+    private static final DefaultRedisScript<String> CLEANUP_VIEWER_SCRIPT;
+    static {
+        CLEANUP_VIEWER_SCRIPT = new DefaultRedisScript<>();
+        CLEANUP_VIEWER_SCRIPT.setScriptText(
+            "local roomId = redis.call('GET', KEYS[1]); " +
+            "if roomId then " +
+            "  redis.call('SREM', 'room:' .. roomId .. ':viewers', ARGV[1]); " +
+            "  redis.call('DEL', KEYS[1]); " +
+            "end; " +
+            "return roomId"
+        );
+        CLEANUP_VIEWER_SCRIPT.setResultType(String.class);
+    }
+
+    /**
+     * Cleans up viewer state on WebSocket disconnect.
+     * Uses a Lua script to atomically read the viewing room, remove from viewers, and delete the key.
+     */
+    public void cleanupViewerOnDisconnect(String userId) {
+        try {
+            String viewingKey = RedisKeyConstants.userViewing(userId);
+            String roomId = redisTemplate.execute(
+                CLEANUP_VIEWER_SCRIPT,
+                java.util.List.of(viewingKey),
+                userId
+            );
+            if (roomId != null) {
+                log.debug("Cleaned up viewer on disconnect: userId={}, roomId={}", userId, roomId);
+            }
+        } catch (RedisConnectionFailureException e) {
+            log.warn("Redis unavailable: cleanupViewerOnDisconnect failed for userId={}", userId);
         }
     }
 

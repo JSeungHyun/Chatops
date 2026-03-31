@@ -4,6 +4,7 @@ import com.chatops.domain.auth.dto.UserResponse;
 import com.chatops.domain.user.dto.UpdateUserRequest;
 import com.chatops.domain.user.entity.User;
 import com.chatops.domain.user.service.UserService;
+import com.chatops.global.common.annotation.RateLimit;
 import com.chatops.global.redis.RedisService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
@@ -31,6 +32,7 @@ public class UserController {
         return userService.findById(user.getId());
     }
 
+    @RateLimit(maxRequests = 20, windowSeconds = 60, byUser = true)
     @GetMapping("/search")
     public List<UserResponse> searchUsers(
             @RequestParam(required = false) @Size(min = 2, max = 20) String nickname,

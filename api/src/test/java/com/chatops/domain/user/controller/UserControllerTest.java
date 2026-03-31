@@ -54,6 +54,9 @@ class UserControllerTest {
     @MockBean
     private RedisService redisService;
 
+    @MockBean
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+
     private String setupAuth() {
         String token = "test-jwt-token";
         User user = TestFixture.createUser();

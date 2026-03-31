@@ -8,6 +8,7 @@ public final class RedisKeyConstants {
     public static String roomMessages(String roomId) { return "room:" + roomId + ":messages"; }
     public static String roomTyping(String roomId) { return "room:" + roomId + ":typing"; }
     public static String roomViewers(String roomId) { return "room:" + roomId + ":viewers"; }
+    public static String userViewing(String userId) { return "user:" + userId + ":viewing"; }
     public static String chatChannel(String roomId) { return "chat:" + roomId; }
     public static String typingChannel(String roomId) { return "chat:" + roomId + ":typing"; }
     public static final String PRESENCE_CHANNEL = "presence";

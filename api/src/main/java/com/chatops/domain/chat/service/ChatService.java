@@ -5,6 +5,7 @@ import com.chatops.domain.chat.dto.MemberResponse;
 import com.chatops.domain.chat.dto.MessageResponse;
 import com.chatops.domain.chat.dto.CreateRoomRequest;
 import com.chatops.domain.chat.dto.SendMessageRequest;
+import com.chatops.domain.chat.dto.SendMessageResult;
 import com.chatops.global.common.dto.PageResponse;
 import com.chatops.global.redis.RedisService;
 import com.chatops.domain.message.entity.Message;
@@ -147,7 +148,7 @@ public class ChatService {
     }
 
     @Transactional
-    public MessageResponse sendMessage(String userId, String roomId, SendMessageRequest request) {
+    public SendMessageResult sendMessage(String userId, String roomId, SendMessageRequest request) {
         ChatRoom room = chatRoomRepository.findById(roomId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Chat room not found"));
 
@@ -171,12 +172,16 @@ public class ChatService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         MessageResponse response = MessageResponse.from(saved, sender);
 
-        // Increment unread count for members not currently viewing the room
+        // Single member query — used for both unread counts and notification targets
         Set<String> viewers = redisService.getViewers(roomId);
         List<ChatRoomMember> members = chatRoomMemberRepository.findByRoomId(roomId);
+        List<String> notifyUserIds = new java.util.ArrayList<>();
         for (ChatRoomMember member : members) {
-            if (!member.getUserId().equals(userId) && !viewers.contains(member.getUserId())) {
-                redisService.incrementUnread(member.getUserId(), roomId);
+            if (!member.getUserId().equals(userId)) {
+                notifyUserIds.add(member.getUserId());
+                if (!viewers.contains(member.getUserId())) {
+                    redisService.incrementUnread(member.getUserId(), roomId);
+                }
             }
         }
 
@@ -188,7 +193,7 @@ public class ChatService {
             log.warn("Failed to serialize message for cache: roomId={}", roomId);
         }
 
-        return response;
+        return new SendMessageResult(response, notifyUserIds);
     }
 
     public PageResponse<MessageResponse> getMessages(String roomId, String userId, int page, int limit) {

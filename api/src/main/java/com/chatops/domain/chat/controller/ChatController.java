@@ -4,9 +4,9 @@ import com.chatops.domain.chat.dto.ChatRoomResponse;
 import com.chatops.domain.chat.dto.MessageResponse;
 import com.chatops.domain.chat.dto.CreateRoomRequest;
 import com.chatops.domain.chat.dto.SendMessageRequest;
-import com.chatops.domain.chat.entity.ChatRoomMember;
-import com.chatops.domain.chat.repository.ChatRoomMemberRepository;
+import com.chatops.domain.chat.dto.SendMessageResult;
 import com.chatops.domain.chat.service.ChatService;
+import com.chatops.global.common.annotation.RateLimit;
 import com.chatops.global.common.dto.PageResponse;
 import com.chatops.global.redis.RedisMessageRelay;
 import com.chatops.domain.user.entity.User;
@@ -30,7 +30,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ChatController {
     private final ChatService chatService;
-    private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final RedisMessageRelay redisMessageRelay;
 
@@ -55,24 +54,21 @@ public class ChatController {
         return chatService.getRoomById(id, user.getId());
     }
 
+    @RateLimit(maxRequests = 30, windowSeconds = 60, byUser = true)
     @PostMapping("/{id}/messages")
     public MessageResponse sendMessage(
             @AuthenticationPrincipal User user,
             @PathVariable String id,
             @Valid @RequestBody SendMessageRequest request) {
-        MessageResponse response = chatService.sendMessage(user.getId(), id, request);
+        SendMessageResult result = chatService.sendMessage(user.getId(), id, request);
+        MessageResponse response = result.messageResponse();
         messagingTemplate.convertAndSend("/topic/room/" + id, response);
         redisMessageRelay.publishToChannel("/topic/room/" + id, response);
 
-        // Send to each member's personal queue for cross-room notifications
-        List<ChatRoomMember> members = chatRoomMemberRepository.findByRoomId(id);
-        for (ChatRoomMember member : members) {
-            if (!member.getUserId().equals(user.getId())) {
-                messagingTemplate.convertAndSendToUser(
-                    member.getUserId(), "/queue/messages", response);
-                redisMessageRelay.publishUserMessage(
-                    member.getUserId(), response);
-            }
+        // Send to each member's personal queue (reuses member list from service layer)
+        for (String memberId : result.notifyUserIds()) {
+            messagingTemplate.convertAndSendToUser(memberId, "/queue/messages", response);
+            redisMessageRelay.publishUserMessage(memberId, response);
         }
         return response;
     }
