@@ -9,8 +9,10 @@ import com.chatops.domain.chat.dto.SendMessageResult;
 import com.chatops.global.common.dto.PageResponse;
 import com.chatops.global.queue.dto.NotificationEvent;
 import com.chatops.global.queue.dto.ReadReceiptEvent;
+import com.chatops.global.queue.producer.FileProcessProducer;
 import com.chatops.global.queue.producer.NotificationProducer;
 import com.chatops.global.queue.producer.ReadReceiptProducer;
+import com.chatops.global.queue.dto.FileProcessEvent;
 import com.chatops.global.redis.RedisService;
 import com.chatops.domain.message.entity.Message;
 import com.chatops.domain.message.repository.MessageRepository;
@@ -51,6 +53,7 @@ public class ChatService {
     private final ObjectMapper objectMapper;
     private final NotificationProducer notificationProducer;
     private final ReadReceiptProducer readReceiptProducer;
+    private final FileProcessProducer fileProcessProducer;
 
     @Transactional
     public ChatRoomResponse createRoom(String userId, CreateRoomRequest request) {
@@ -170,6 +173,18 @@ public class ChatService {
             .roomId(roomId)
             .build();
         Message saved = messageRepository.save(message);
+
+        // Trigger async file processing for image/file messages
+        if ((saved.getType() == MessageType.IMAGE || saved.getType() == MessageType.FILE)
+                && saved.getFileUrl() != null && !saved.getFileUrl().isBlank()) {
+            String processType = saved.getType() == MessageType.IMAGE ? "THUMBNAIL" : "METADATA";
+            fileProcessProducer.requestFileProcessing(FileProcessEvent.builder()
+                .fileUrl(saved.getFileUrl())
+                .roomId(roomId)
+                .messageId(saved.getId())
+                .processType(processType)
+                .build());
+        }
 
         room.setUpdatedAt(LocalDateTime.now());
         chatRoomRepository.save(room);

@@ -6,6 +6,7 @@ import { sendStompMessage } from '@/socket/socket';
 
 interface MessageInputProps {
   onSend: (content: string) => void;
+  onFileSend?: (fileUrl: string, fileName: string, contentType: string) => void;
   disabled?: boolean;
   roomId?: string;
 }
@@ -13,7 +14,7 @@ interface MessageInputProps {
 const MAX_LENGTH = 5000;
 const TYPING_DEBOUNCE_MS = 1500;
 
-export function MessageInput({ onSend, disabled, roomId }: MessageInputProps) {
+export function MessageInput({ onSend, onFileSend, disabled, roomId }: MessageInputProps) {
   const [content, setContent] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,13 +83,17 @@ export function MessageInput({ onSend, disabled, roomId }: MessageInputProps) {
     }
   };
 
+  const handleFileUploaded = useCallback((result: { fileUrl: string; fileName: string; contentType: string }) => {
+    onFileSend?.(result.fileUrl, result.fileName, result.contentType);
+  }, [onFileSend]);
+
   const nearLimit = content.length > MAX_LENGTH * 0.9;
   const canSend = content.trim().length > 0 && !disabled;
 
   return (
     <div className="border-t border-slate-200 bg-white p-3">
       <div className="flex items-end gap-2">
-        <FileUpload />
+        <FileUpload onFileUploaded={handleFileUploaded} disabled={disabled} />
 
         <div className="relative min-w-0 flex-1">
           <textarea

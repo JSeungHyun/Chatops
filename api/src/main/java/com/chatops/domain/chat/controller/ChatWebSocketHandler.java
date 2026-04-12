@@ -45,11 +45,22 @@ public class ChatWebSocketHandler {
             throw new ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "Not authenticated");
         }
 
-        if (request.getContent() == null || request.getContent().isBlank()) {
-            throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Message content must not be blank");
-        }
-        if (request.getContent().length() > 5000) {
-            throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Message content exceeds max length (5000)");
+        // File messages (IMAGE/FILE) require fileUrl; text messages require content
+        boolean isFileMessage = request.getType() != null
+            && (request.getType() == com.chatops.domain.message.entity.MessageType.IMAGE
+                || request.getType() == com.chatops.domain.message.entity.MessageType.FILE);
+
+        if (isFileMessage) {
+            if (request.getFileUrl() == null || request.getFileUrl().isBlank()) {
+                throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "File URL must not be blank for file messages");
+            }
+        } else {
+            if (request.getContent() == null || request.getContent().isBlank()) {
+                throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Message content must not be blank");
+            }
+            if (request.getContent().length() > 5000) {
+                throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Message content exceeds max length (5000)");
+            }
         }
 
         SendMessageRequest sendRequest = new SendMessageRequest();

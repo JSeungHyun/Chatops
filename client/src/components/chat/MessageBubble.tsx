@@ -65,12 +65,22 @@ export const MessageBubble = memo(function MessageBubble({
           )}
 
           {message.type === 'IMAGE' && message.fileUrl && (
-            <img
-              src={message.fileUrl}
-              alt={message.content || 'Image'}
-              className="max-h-64 max-w-full rounded-lg"
-              loading="lazy"
-            />
+            <a href={message.fileUrl} target="_blank" rel="noopener noreferrer">
+              <img
+                src={message.fileUrl}
+                alt={message.content || 'Image'}
+                className="max-h-64 max-w-full cursor-pointer rounded-lg transition-opacity hover:opacity-90"
+                loading="lazy"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  target.style.display = 'none';
+                  const fallback = document.createElement('span');
+                  fallback.textContent = message.content || '이미지를 불러올 수 없습니다';
+                  fallback.className = 'text-sm opacity-60';
+                  target.parentElement?.appendChild(fallback);
+                }}
+              />
+            </a>
           )}
 
           {message.type === 'FILE' && message.fileUrl && (

@@ -157,6 +157,26 @@ export function ChatRoom() {
     }
   };
 
+  const handleFileSend = async (fileUrl: string, fileName: string, contentType: string) => {
+    if (!currentRoom || !user) return;
+
+    const isImage = contentType.startsWith('image/');
+    try {
+      const res = await api.post<Message>(
+        `/chats/${currentRoom.id}/messages`,
+        {
+          content: fileName,
+          type: isImage ? 'IMAGE' : 'FILE',
+          fileUrl,
+        },
+      );
+      addMessage(res.data);
+      scrollToBottom();
+    } catch {
+      // Send error — could add toast here
+    }
+  };
+
   const rooms = useChatStore((s) => s.rooms);
   const isRestoring = !currentRoom && rooms.length === 0 && user && !!getLastRoomId(user.id);
 
@@ -267,7 +287,7 @@ export function ChatRoom() {
         <div ref={messagesEndRef} />
       </div>
 
-      <MessageInput onSend={handleSend} roomId={currentRoom?.id} />
+      <MessageInput onSend={handleSend} onFileSend={handleFileSend} roomId={currentRoom?.id} />
     </div>
   );
 }
