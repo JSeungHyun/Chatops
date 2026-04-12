@@ -45,12 +45,12 @@ public class FileService {
         "application/x-zip-compressed"
     );
 
-    public FileUploadResult uploadFile(MultipartFile file) {
+    public FileUploadResult uploadFile(MultipartFile file, String roomId) {
         validateFile(file);
 
         String originalFilename = file.getOriginalFilename() != null
             ? file.getOriginalFilename() : "unknown";
-        String objectKey = UUID.randomUUID() + "/" + originalFilename;
+        String objectKey = "rooms/" + roomId + "/" + UUID.randomUUID() + "/" + originalFilename;
         String contentType = file.getContentType() != null
             ? file.getContentType() : "application/octet-stream";
 
@@ -75,12 +75,16 @@ public class FileService {
 
     public String getPresignedUrl(String objectKey) {
         try {
-            return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+            String presignedUrl = minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                 .method(Method.GET)
                 .bucket(minioConfig.getBucket())
                 .object(objectKey)
                 .expiry(1, TimeUnit.HOURS)
                 .build());
+
+            // Rewrite internal Docker URL to Nginx-proxied path
+            // http://minio:9000/chatops-files/key?params → /minio/chatops-files/key?params
+            return presignedUrl.replaceFirst("http://[^/]+:\\d+", "/minio");
         } catch (Exception e) {
             log.error("Failed to generate presigned URL: key={}", objectKey);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "파일 URL 생성에 실패했습니다");

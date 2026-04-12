@@ -19,8 +19,10 @@ public class FileController {
     private final FileService fileService;
 
     @PostMapping("/upload")
-    public ResponseEntity<FileUploadResponse> uploadFile(@RequestParam("file") MultipartFile file) {
-        FileUploadResult result = fileService.uploadFile(file);
+    public ResponseEntity<FileUploadResponse> uploadFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("roomId") String roomId) {
+        FileUploadResult result = fileService.uploadFile(file, roomId);
         FileUploadResponse response = new FileUploadResponse(
             result.fileUrl(),
             result.fileName(),

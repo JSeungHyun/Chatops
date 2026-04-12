@@ -64,6 +64,7 @@ test.describe('File Upload API', () => {
     const res = await request.post(`${API_URL}/files/upload`, {
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
+        roomId: 'test-room',
         file: {
           name: 'test-image.png',
           mimeType: 'image/png',
@@ -84,6 +85,7 @@ test.describe('File Upload API', () => {
     const res = await request.post(`${API_URL}/files/upload`, {
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
+        roomId: 'test-room',
         file: {
           name: 'test-doc.txt',
           mimeType: 'text/plain',
@@ -103,6 +105,7 @@ test.describe('File Upload API', () => {
     const res = await request.post(`${API_URL}/files/upload`, {
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
+        roomId: 'test-room',
         file: {
           name: 'large-file.bin',
           mimeType: 'application/octet-stream',
@@ -118,6 +121,7 @@ test.describe('File Upload API', () => {
     const res = await request.post(`${API_URL}/files/upload`, {
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
+        roomId: 'test-room',
         file: {
           name: 'script.sh',
           mimeType: 'application/x-sh',
@@ -132,6 +136,7 @@ test.describe('File Upload API', () => {
   test('should reject unauthenticated upload', async ({ request }) => {
     const res = await request.post(`${API_URL}/files/upload`, {
       multipart: {
+        roomId: 'test-room',
         file: {
           name: 'test.txt',
           mimeType: 'text/plain',
@@ -147,6 +152,7 @@ test.describe('File Upload API', () => {
     const uploadRes = await request.post(`${API_URL}/files/upload`, {
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
+        roomId: 'test-room',
         file: {
           name: 'download-test.txt',
           mimeType: 'text/plain',
@@ -156,8 +162,8 @@ test.describe('File Upload API', () => {
     });
     const { fileUrl } = await uploadRes.json();
 
-    // Presigned URL points to internal Docker hostname 'minio',
-    // so we verify the 302 redirect happens with a valid presigned URL location
+    // Presigned URL now goes through Nginx /minio/ proxy, so the redirect
+    // points to a relative /minio/ path that Nginx can resolve
     const downloadRes = await request.fetch(`${API_URL}${fileUrl}`, {
       headers: { Authorization: `Bearer ${token}` },
       maxRedirects: 0,
@@ -166,6 +172,8 @@ test.describe('File Upload API', () => {
     expect(downloadRes.status()).toBe(302);
     const location = downloadRes.headers()['location'];
     expect(location).toBeTruthy();
+    // URL should now be /minio/... instead of http://minio:9000/...
+    expect(location).toContain('/minio/');
     expect(location).toContain('X-Amz-Signature');
   });
 
@@ -203,6 +211,7 @@ test.describe('File Message Flow (API)', () => {
     const uploadRes = await request.post(`${API_URL}/files/upload`, {
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
+        roomId: 'test-room',
         file: {
           name: 'chat-image.png',
           mimeType: 'image/png',
@@ -230,6 +239,7 @@ test.describe('File Message Flow (API)', () => {
     const uploadRes = await request.post(`${API_URL}/files/upload`, {
       headers: { Authorization: `Bearer ${token}` },
       multipart: {
+        roomId: 'test-room',
         file: {
           name: 'report.txt',
           mimeType: 'text/plain',

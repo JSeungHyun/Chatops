@@ -6,7 +6,7 @@ import { sendStompMessage } from '@/socket/socket';
 
 interface MessageInputProps {
   onSend: (content: string) => void;
-  onFileSend?: (fileUrl: string, fileName: string, contentType: string) => void;
+  onFileSend?: (fileUrl: string, fileName: string, fileSize: number, contentType: string) => void;
   disabled?: boolean;
   roomId?: string;
 }
@@ -83,17 +83,17 @@ export function MessageInput({ onSend, onFileSend, disabled, roomId }: MessageIn
     }
   };
 
-  const handleFileUploaded = useCallback((result: { fileUrl: string; fileName: string; contentType: string }) => {
-    onFileSend?.(result.fileUrl, result.fileName, result.contentType);
+  const handleFileUploaded = useCallback((result: { fileUrl: string; fileName: string; fileSize: number; contentType: string }) => {
+    onFileSend?.(result.fileUrl, result.fileName, result.fileSize, result.contentType);
   }, [onFileSend]);
 
   const nearLimit = content.length > MAX_LENGTH * 0.9;
   const canSend = content.trim().length > 0 && !disabled;
 
   return (
-    <div className="border-t border-slate-200 bg-white p-3">
+    <div className="relative border-t border-slate-200 bg-white p-3">
       <div className="flex items-end gap-2">
-        <FileUpload onFileUploaded={handleFileUploaded} disabled={disabled} />
+        <FileUpload onFileUploaded={handleFileUploaded} disabled={disabled} roomId={roomId} />
 
         <div className="relative min-w-0 flex-1">
           <textarea

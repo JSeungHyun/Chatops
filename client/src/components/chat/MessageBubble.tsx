@@ -2,7 +2,7 @@ import { memo } from 'react';
 import clsx from 'clsx';
 import { FileText, Download } from 'lucide-react';
 import { Avatar } from '@/components/common/Avatar';
-import { formatDate } from '@/utils/format';
+import { formatDate, formatFileSize } from '@/utils/format';
 import type { Message } from '@/types/message';
 import type { RoomType } from '@/types/chat';
 
@@ -23,6 +23,19 @@ export const MessageBubble = memo(function MessageBubble({
   readByCount = 0,
   roomType = 'DIRECT',
 }: MessageBubbleProps) {
+  // Parse file content: "filename|size" or just "filename"
+  const parseFileContent = (content: string) => {
+    const parts = content.split('|');
+    return {
+      fileName: parts[0] || 'File',
+      fileSize: parts[1] ? parseInt(parts[1], 10) : null,
+    };
+  };
+
+  const fileInfo = (message.type === 'IMAGE' || message.type === 'FILE')
+    ? parseFileContent(message.content)
+    : null;
+
   return (
     <div
       className={clsx('flex gap-2', isOwn ? 'flex-row-reverse' : 'flex-row')}
@@ -65,22 +78,29 @@ export const MessageBubble = memo(function MessageBubble({
           )}
 
           {message.type === 'IMAGE' && message.fileUrl && (
-            <a href={message.fileUrl} target="_blank" rel="noopener noreferrer">
-              <img
-                src={message.fileUrl}
-                alt={message.content || 'Image'}
-                className="max-h-64 max-w-full cursor-pointer rounded-lg transition-opacity hover:opacity-90"
-                loading="lazy"
-                onError={(e) => {
-                  const target = e.currentTarget;
-                  target.style.display = 'none';
-                  const fallback = document.createElement('span');
-                  fallback.textContent = message.content || '이미지를 불러올 수 없습니다';
-                  fallback.className = 'text-sm opacity-60';
-                  target.parentElement?.appendChild(fallback);
-                }}
-              />
-            </a>
+            <div>
+              <a href={message.fileUrl} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={message.fileUrl}
+                  alt={fileInfo?.fileName || 'Image'}
+                  className="max-h-64 max-w-full cursor-pointer rounded-lg transition-opacity hover:opacity-90"
+                  loading="lazy"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    target.style.display = 'none';
+                    const fallback = document.createElement('span');
+                    fallback.textContent = fileInfo?.fileName || '이미지를 불러올 수 없습니다';
+                    fallback.className = 'text-sm opacity-60';
+                    target.parentElement?.appendChild(fallback);
+                  }}
+                />
+              </a>
+              {fileInfo?.fileSize && (
+                <p className={clsx('mt-1 text-[11px]', isOwn ? 'text-primary-200' : 'text-slate-400')}>
+                  {fileInfo.fileName} · {formatFileSize(fileInfo.fileSize)}
+                </p>
+              )}
+            </div>
           )}
 
           {message.type === 'FILE' && message.fileUrl && (
@@ -96,9 +116,16 @@ export const MessageBubble = memo(function MessageBubble({
               )}
             >
               <FileText className="h-5 w-5 shrink-0" />
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {message.content || 'File'}
-              </span>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-sm">
+                  {fileInfo?.fileName || 'File'}
+                </span>
+                {fileInfo?.fileSize && (
+                  <span className={clsx('text-[11px]', isOwn ? 'text-primary-200' : 'text-slate-400')}>
+                    {formatFileSize(fileInfo.fileSize)}
+                  </span>
+                )}
+              </div>
               <Download className="h-4 w-4 shrink-0" />
             </a>
           )}

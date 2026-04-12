@@ -157,7 +157,7 @@ export function ChatRoom() {
     }
   };
 
-  const handleFileSend = async (fileUrl: string, fileName: string, contentType: string) => {
+  const handleFileSend = async (fileUrl: string, fileName: string, fileSize: number, contentType: string) => {
     if (!currentRoom || !user) return;
 
     const isImage = contentType.startsWith('image/');
@@ -165,7 +165,7 @@ export function ChatRoom() {
       const res = await api.post<Message>(
         `/chats/${currentRoom.id}/messages`,
         {
-          content: fileName,
+          content: `${fileName}|${fileSize}`,
           type: isImage ? 'IMAGE' : 'FILE',
           fileUrl,
         },
