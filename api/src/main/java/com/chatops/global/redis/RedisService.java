@@ -136,6 +136,14 @@ public class RedisService {
         }
     }
 
+    public void invalidateMessageCache(String roomId) {
+        try {
+            redisTemplate.delete(RedisKeyConstants.roomMessages(roomId));
+        } catch (RedisConnectionFailureException e) {
+            log.warn("Redis unavailable: invalidateMessageCache failed for roomId={}", roomId);
+        }
+    }
+
     public List<String> getCachedMessages(String roomId) {
         try {
             String key = RedisKeyConstants.roomMessages(roomId);

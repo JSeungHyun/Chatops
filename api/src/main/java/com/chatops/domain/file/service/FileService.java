@@ -1,6 +1,7 @@
 package com.chatops.domain.file.service;
 
 import com.chatops.global.config.MinioConfig;
+import com.chatops.global.metrics.MetricsService;
 import io.minio.*;
 import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
@@ -27,16 +28,23 @@ public class FileService {
 
     private final MinioClient minioClient;
     private final MinioConfig minioConfig;
+    private final MetricsService metricsService;
 
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    private static final long MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB
     private static final int THUMBNAIL_SIZE = 200;
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
         "image/jpeg", "image/png", "image/gif", "image/webp"
     );
 
+    private static final Set<String> ALLOWED_VIDEO_TYPES = Set.of(
+        "video/mp4", "video/webm", "video/quicktime"
+    );
+
     private static final Set<String> ALLOWED_FILE_TYPES = Set.of(
         "image/jpeg", "image/png", "image/gif", "image/webp",
+        "video/mp4", "video/webm", "video/quicktime",
         "application/pdf",
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -66,6 +74,7 @@ public class FileService {
 
             log.info("File uploaded: key={}, size={}, type={}", objectKey, file.getSize(), contentType);
 
+            metricsService.recordFileUpload();
             return new FileUploadResult(fileUrl, originalFilename, file.getSize(), contentType);
         } catch (Exception e) {
             log.error("File upload failed: {}", e.getMessage());
@@ -164,13 +173,16 @@ public class FileService {
         if (file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "파일이 비어있습니다");
         }
-        if (file.getSize() > MAX_FILE_SIZE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "파일 크기는 10MB를 초과할 수 없습니다");
-        }
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_FILE_TYPES.contains(contentType)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "허용되지 않는 파일 형식입니다. 허용: 이미지(jpeg/png/gif/webp), PDF, DOC, TXT, ZIP");
+                "허용되지 않는 파일 형식입니다. 허용: 이미지(jpeg/png/gif/webp), 동영상(mp4/webm/mov), PDF, DOC, TXT, ZIP");
+        }
+        boolean isVideo = ALLOWED_VIDEO_TYPES.contains(contentType);
+        long limit = isVideo ? MAX_VIDEO_SIZE : MAX_FILE_SIZE;
+        if (file.getSize() > limit) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                isVideo ? "동영상 크기는 50MB를 초과할 수 없습니다" : "파일 크기는 10MB를 초과할 수 없습니다");
         }
     }
 

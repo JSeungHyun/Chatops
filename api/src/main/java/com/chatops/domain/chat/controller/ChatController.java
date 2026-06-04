@@ -1,6 +1,7 @@
 package com.chatops.domain.chat.controller;
 
 import com.chatops.domain.chat.dto.ChatRoomResponse;
+import com.chatops.domain.chat.dto.MessageDeletedEvent;
 import com.chatops.domain.chat.dto.MessageResponse;
 import com.chatops.domain.chat.dto.CreateRoomRequest;
 import com.chatops.domain.chat.dto.SendMessageRequest;
@@ -78,6 +79,18 @@ public class ChatController {
             @AuthenticationPrincipal User user,
             @PathVariable String id) {
         chatService.markRoomAsRead(user.getId(), id);
+    }
+
+    @DeleteMapping("/{roomId}/messages/{messageId}")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    public void deleteMessage(
+            @AuthenticationPrincipal User user,
+            @PathVariable String roomId,
+            @PathVariable String messageId) {
+        chatService.deleteMessage(user.getId(), roomId, messageId);
+        MessageDeletedEvent event = new MessageDeletedEvent(messageId, roomId);
+        messagingTemplate.convertAndSend("/topic/room/" + roomId, event);
+        redisMessageRelay.publishToChannel("/topic/room/" + roomId, event);
     }
 
     @GetMapping("/{id}/messages")

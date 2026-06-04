@@ -7,8 +7,10 @@ import com.chatops.domain.chat.dto.CreateRoomRequest;
 import com.chatops.domain.chat.dto.SendMessageRequest;
 import com.chatops.domain.chat.dto.SendMessageResult;
 import com.chatops.global.common.dto.PageResponse;
+import com.chatops.global.metrics.MetricsService;
 import com.chatops.global.queue.dto.NotificationEvent;
 import com.chatops.global.queue.dto.ReadReceiptEvent;
+import com.chatops.domain.file.service.FileService;
 import com.chatops.global.queue.producer.FileProcessProducer;
 import com.chatops.global.queue.producer.NotificationProducer;
 import com.chatops.global.queue.producer.ReadReceiptProducer;
@@ -16,6 +18,7 @@ import com.chatops.global.queue.dto.FileProcessEvent;
 import com.chatops.global.redis.RedisService;
 import com.chatops.domain.message.entity.Message;
 import com.chatops.domain.message.repository.MessageRepository;
+import com.chatops.domain.message.repository.ReadReceiptRepository;
 import com.chatops.domain.message.entity.MessageType;
 import com.chatops.domain.user.entity.User;
 import com.chatops.domain.user.repository.UserRepository;
@@ -32,6 +35,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -48,12 +53,15 @@ public class ChatService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final MessageRepository messageRepository;
+    private final ReadReceiptRepository readReceiptRepository;
     private final UserRepository userRepository;
     private final RedisService redisService;
     private final ObjectMapper objectMapper;
     private final NotificationProducer notificationProducer;
     private final ReadReceiptProducer readReceiptProducer;
     private final FileProcessProducer fileProcessProducer;
+    private final FileService fileService;
+    private final MetricsService metricsService;
 
     @Transactional
     public ChatRoomResponse createRoom(String userId, CreateRoomRequest request) {
@@ -173,6 +181,9 @@ public class ChatService {
             .roomId(roomId)
             .build();
         Message saved = messageRepository.save(message);
+
+        // 메트릭: 트랜잭션 커밋 이후에만 집계 (커밋 전 호출 시 롤백 발생하면 과다집계됨)
+        recordMessageSentAfterCommit(roomId);
 
         // Trigger async file processing for image/file messages
         if ((saved.getType() == MessageType.IMAGE || saved.getType() == MessageType.FILE)
@@ -318,6 +329,57 @@ public class ChatService {
                 .roomId(roomId)
                 .messageIds(messageIds)
                 .build());
+        }
+    }
+
+    @Transactional
+    public void deleteMessage(String userId, String roomId, String messageId) {
+        Message message = messageRepository.findById(messageId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found"));
+
+        if (!message.getRoomId().equals(roomId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found");
+        }
+        if (!message.getUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인이 작성한 메시지만 삭제할 수 있습니다");
+        }
+
+        // Remove MinIO object for IMAGE/FILE messages (ignore failures to allow row deletion)
+        if ((message.getType() == MessageType.IMAGE || message.getType() == MessageType.FILE)
+                && message.getFileUrl() != null && !message.getFileUrl().isBlank()) {
+            String prefix = "/files/download/";
+            String fileUrl = message.getFileUrl();
+            if (fileUrl.startsWith(prefix)) {
+                String objectKey = fileUrl.substring(prefix.length());
+                try {
+                    fileService.deleteFile(objectKey);
+                } catch (Exception e) {
+                    log.warn("MinIO object delete failed, continuing with DB delete: key={}, err={}",
+                        objectKey, e.getMessage());
+                }
+            }
+        }
+
+        readReceiptRepository.deleteByMessageId(messageId);
+        messageRepository.delete(message);
+        redisService.invalidateMessageCache(roomId);
+    }
+
+    /**
+     * 메시지 전송 메트릭을 트랜잭션 커밋 이후에 기록한다.
+     * sendMessage()는 @Transactional이라 save 직후 카운터를 올리면, 이후 작업이 롤백될 때 과다집계된다.
+     * 트랜잭션이 없으면(테스트 등) 즉시 기록한다.
+     */
+    private void recordMessageSentAfterCommit(String roomId) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    metricsService.recordMessageSent(roomId);
+                }
+            });
+        } else {
+            metricsService.recordMessageSent(roomId);
         }
     }
 

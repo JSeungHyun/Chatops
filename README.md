@@ -56,7 +56,6 @@ Client (React + Socket.io)
 | 파일 저장소 | MinIO (S3 호환) |
 | 리버스 프록시 | Nginx |
 | 모니터링 | Prometheus + Grafana (Micrometer) |
-| CI/CD | Jenkins |
 | 컨테이너 | Docker / Docker Compose |
 
 ## 프로젝트 구조
@@ -80,8 +79,7 @@ chatops/
 │       ├── application.yml       # 기본 설정 (Docker 환경)
 │       └── application-dev.yml   # 개발 프로파일 (localhost)
 ├── nginx/           # 리버스 프록시 설정
-├── monitoring/      # Prometheus + Grafana 설정
-└── jenkins/         # CI/CD 파이프라인
+└── monitoring/      # Prometheus + Grafana 설정
 ```
 
 ## 로컬 개발환경

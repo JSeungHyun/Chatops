@@ -1,0 +1,11 @@
+apiVersion: 1
+
+# Prometheus를 기본 데이터소스로 자동 등록 (UI 수동 설정 불필요)
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true

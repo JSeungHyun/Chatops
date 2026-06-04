@@ -96,12 +96,31 @@ services:
       - '9090:9090'
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alerting/rules.yml:/etc/prometheus/rules.yml
+    depends_on:
+      - api
 
   grafana:
     image: grafana/grafana
     ports:
       - '3001:3000'
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  # 호스트 시스템 메트릭 수집 (prometheus.yml node-exporter 타겟)
+  node-exporter:
+    image: prom/node-exporter
+    ports:
+      - '9100:9100'
 
 volumes:
   pg_data:
   minio_data:
+  grafana_data:

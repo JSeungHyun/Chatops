@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# /var/lib/grafana/dashboards 에 마운트된 JSON 대시보드를 자동 로딩
+providers:
+  - name: 'ChatOps'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

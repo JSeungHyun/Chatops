@@ -1,3 +1,42 @@
 groups:
   - name: chatops-alerts
-    rules: []
+    rules:
+      # API 인스턴스 다운 — 스크랩 타겟이 1분 이상 응답 없음
+      - alert: ApiInstanceDown
+        expr: up{job="chatops-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ChatOps API 인스턴스 다운"
+          description: "{{ $labels.instance }} 이(가) 1분 이상 스크랩에 응답하지 않습니다."
+
+      # RabbitMQ 큐 적체 — 컨슈머 처리 지연/장애 신호
+      - alert: RabbitMqQueueBacklog
+        expr: rabbitmq_queue_length > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ 큐 적체"
+          description: "{{ $labels.queue }} 큐에 {{ $value }}건이 2분 이상 적체되어 있습니다."
+
+      # Redis 메모리 사용량 과다 (200MB 초과)
+      - alert: HighRedisMemoryUsage
+        expr: redis_memory_usage_bytes > 200 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis 메모리 사용량 높음"
+          description: "Redis used_memory가 5분 이상 200MB를 초과했습니다. (현재 {{ $value | humanize1024 }}B)"
+
+      # API p95 응답 지연 — 1초 초과
+      - alert: HighApiLatencyP95
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job="chatops-api"}[5m]))) > 1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 응답 지연"
+          description: "최근 5분 p95 응답시간이 3분 이상 1초를 초과했습니다."

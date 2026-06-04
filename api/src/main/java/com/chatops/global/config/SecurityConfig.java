@@ -29,9 +29,12 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/auth/check-nickname").permitAll()
-                .requestMatchers("/actuator/health").permitAll()
+                // Prometheus 스크랩 엔드포인트는 인증 없이 허용 (헬스/메트릭).
+                // 운영 환경에서는 Nginx/방화벽으로 내부 네트워크에서만 접근하도록 제한할 것.
+                .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                 .requestMatchers("/actuator/**").authenticated()
                 .requestMatchers("/ws/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/files/download/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -1,5 +1,6 @@
 package com.chatops.global.config;
 
+import com.chatops.global.metrics.MetricsService;
 import com.chatops.global.redis.RedisMessageRelay;
 import com.chatops.global.redis.RedisService;
 import lombok.RequiredArgsConstructor;
@@ -21,9 +22,13 @@ public class WebSocketEventListener {
     private final RedisService redisService;
     private final SimpMessagingTemplate messagingTemplate;
     private final RedisMessageRelay redisMessageRelay;
+    private final MetricsService metricsService;
 
     @EventListener
     public void handleWebSocketConnect(SessionConnectedEvent event) {
+        // ws_connections_active: connect/disconnect 이벤트는 세션당 1:1로 짝지어지므로
+        // userId 유무와 무관하게 증감시켜 카운트 드리프트를 막는다
+        metricsService.incrementWsConnections();
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
         Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
         if (sessionAttributes != null) {
@@ -40,6 +45,7 @@ public class WebSocketEventListener {
 
     @EventListener
     public void handleWebSocketDisconnect(SessionDisconnectEvent event) {
+        metricsService.decrementWsConnections();
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
         Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
         if (sessionAttributes != null) {

@@ -23,6 +23,12 @@ spring:
     serialization:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null
+  servlet:
+    multipart:
+      # FileService 상한과 정렬: 단일 파일 50MB(동영상), 요청 전체 55MB.
+      # 미설정 시 Spring 기본값(파일 1MB/요청 10MB)이 실질 병목이 되어 파일 전송이 깨진다.
+      max-file-size: 50MB
+      max-request-size: 55MB
   data:
     redis:
       host: redis
@@ -61,7 +67,16 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,prometheus
+        include: health,prometheus,metrics,info
   endpoint:
     health:
       show-details: when_authorized
+  metrics:
+    tags:
+      application: chatops-api
+    distribution:
+      # api_request_duration_seconds(p50/p95/p99) 산출용 히스토그램 버킷 활성화
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 50ms,100ms,200ms,500ms,1s

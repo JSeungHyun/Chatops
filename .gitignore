@@ -47,3 +47,11 @@ AGENTS.md
 
 # Study notes (개인 학습 자료)
 study-notes/
+
+/docs
+/client/e2e
+/client/src/test
+
+# Test artifacts
+test-results/
+client/test-results/

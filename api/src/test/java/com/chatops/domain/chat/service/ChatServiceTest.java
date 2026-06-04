@@ -15,6 +15,7 @@ import com.chatops.domain.message.repository.MessageRepository;
 import com.chatops.domain.user.entity.User;
 import com.chatops.domain.user.repository.UserRepository;
 import com.chatops.global.common.dto.PageResponse;
+import com.chatops.global.metrics.MetricsService;
 import com.chatops.global.queue.producer.NotificationProducer;
 import com.chatops.global.queue.producer.ReadReceiptProducer;
 import com.chatops.global.redis.RedisService;
@@ -70,6 +71,9 @@ class ChatServiceTest {
 
     @Mock
     private ReadReceiptProducer readReceiptProducer;
+
+    @Mock
+    private MetricsService metricsService;
 
     @Test
     @DisplayName("createRoom - 1대1 성공")

@@ -43,6 +43,7 @@ interface ChatState {
   setCurrentRoom: (room: ChatRoom | null) => void;
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
+  removeMessage: (messageId: string) => void;
   prependMessages: (messages: Message[]) => void;
   resetMessages: () => void;
   setCurrentPage: (page: number) => void;
@@ -81,6 +82,8 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
   setMessages: (messages) => set({ messages }),
   addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
+  removeMessage: (messageId) =>
+    set((state) => ({ messages: state.messages.filter((m) => m.id !== messageId) })),
   prependMessages: (messages) =>
     set((state) => ({ messages: [...messages, ...state.messages] })),
   resetMessages: () =>

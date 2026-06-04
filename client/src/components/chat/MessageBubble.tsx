@@ -1,8 +1,9 @@
 import { memo } from 'react';
 import clsx from 'clsx';
-import { FileText, Download } from 'lucide-react';
+import { FileText, Download, Play } from 'lucide-react';
 import { Avatar } from '@/components/common/Avatar';
 import { formatDate, formatFileSize } from '@/utils/format';
+import { getMediaKind } from '@/utils/media';
 import type { Message } from '@/types/message';
 import type { RoomType } from '@/types/chat';
 
@@ -13,6 +14,7 @@ interface MessageBubbleProps {
   showTimestamp: boolean;
   readByCount?: number;
   roomType?: RoomType;
+  onOpenMedia?: (message: Message) => void;
 }
 
 export const MessageBubble = memo(function MessageBubble({
@@ -22,6 +24,7 @@ export const MessageBubble = memo(function MessageBubble({
   showTimestamp,
   readByCount = 0,
   roomType = 'DIRECT',
+  onOpenMedia,
 }: MessageBubbleProps) {
   // Parse file content: "filename|size" or just "filename"
   const parseFileContent = (content: string) => {
@@ -35,6 +38,7 @@ export const MessageBubble = memo(function MessageBubble({
   const fileInfo = (message.type === 'IMAGE' || message.type === 'FILE')
     ? parseFileContent(message.content)
     : null;
+  const mediaKind = fileInfo ? getMediaKind(fileInfo.fileName) : 'file';
 
   return (
     <div
@@ -77,24 +81,62 @@ export const MessageBubble = memo(function MessageBubble({
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           )}
 
-          {message.type === 'IMAGE' && message.fileUrl && (
-            <div>
-              <a href={message.fileUrl} target="_blank" rel="noopener noreferrer">
+          {(message.type === 'IMAGE' || message.type === 'FILE') && mediaKind === 'image' && (
+            <div
+              className="cursor-pointer overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800"
+              style={
+                message.width && message.height
+                  ? {
+                      aspectRatio: `${message.width} / ${message.height}`,
+                      maxWidth: Math.min(message.width, 300),
+                    }
+                  : { width: 200, height: 150 }
+              }
+              onClick={() => onOpenMedia?.(message)}
+            >
+              {message.thumbnailUrl ? (
                 <img
-                  src={message.fileUrl}
+                  src={message.thumbnailUrl}
                   alt={fileInfo?.fileName || 'Image'}
-                  className="max-h-64 max-w-full cursor-pointer rounded-lg transition-opacity hover:opacity-90"
+                  className="h-full w-full object-cover transition-opacity duration-200"
                   loading="lazy"
                   onError={(e) => {
                     const target = e.currentTarget;
                     target.style.display = 'none';
+                    target.parentElement?.classList.add('flex', 'items-center', 'justify-center');
                     const fallback = document.createElement('span');
                     fallback.textContent = fileInfo?.fileName || '이미지를 불러올 수 없습니다';
-                    fallback.className = 'text-sm opacity-60';
+                    fallback.className = 'text-xs text-slate-400 p-2';
                     target.parentElement?.appendChild(fallback);
                   }}
                 />
-              </a>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center animate-pulse">
+                  <div className="h-8 w-8 rounded-full border-2 border-gray-300 border-t-blue-500 animate-spin" />
+                </div>
+              )}
+            </div>
+          )}
+
+          {(message.type === 'IMAGE' || message.type === 'FILE') && message.fileUrl && mediaKind === 'video' && (
+            <div>
+              <button
+                type="button"
+                onClick={() => onOpenMedia?.(message)}
+                className="group relative block overflow-hidden rounded-lg"
+              >
+                <video
+                  src={message.fileUrl}
+                  className="max-h-64 max-w-full rounded-lg bg-black"
+                  preload="metadata"
+                  muted
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition-colors group-hover:bg-black/30">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/80 shadow-lg">
+                    <Play className="h-6 w-6 fill-slate-900 text-slate-900" />
+                  </div>
+                </div>
+              </button>
               {fileInfo?.fileSize && (
                 <p className={clsx('mt-1 text-[11px]', isOwn ? 'text-primary-200' : 'text-slate-400')}>
                   {fileInfo.fileName} · {formatFileSize(fileInfo.fileSize)}
@@ -103,11 +145,10 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           )}
 
-          {message.type === 'FILE' && message.fileUrl && (
+          {(message.type === 'IMAGE' || message.type === 'FILE') && message.fileUrl && mediaKind === 'file' && (
             <a
               href={message.fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              download={fileInfo?.fileName}
               className={clsx(
                 'flex items-center gap-2 rounded-lg p-2 transition-colors',
                 isOwn

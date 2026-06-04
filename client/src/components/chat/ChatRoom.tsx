@@ -1,4 +1,5 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
+import toast from 'react-hot-toast';
 import api from '@/api/axios';
 import { getStompClient } from '@/socket/socket';
 import { useChatStore, getLastRoomId } from '@/stores/chatStore';
@@ -8,12 +9,32 @@ import { useSocket } from '@/hooks/useSocket';
 import { Header } from '@/components/layout/Header';
 import { MessageBubble } from './MessageBubble';
 import { MessageInput } from './MessageInput';
+import { MediaViewerModal } from './MediaViewerModal';
 import { TypingIndicator } from './TypingIndicator';
 import { DateSeparator } from './DateSeparator';
 import { EmptyChat } from './EmptyChat';
 import { Spinner } from '@/components/common/Spinner';
 import type { Message } from '@/types/message';
 import type { TypingEvent } from '@/types/chat';
+
+interface MessageDeletedEvent {
+  id: string;
+  roomId: string;
+  deleted: true;
+}
+
+function isDeletedEvent(data: unknown): data is MessageDeletedEvent {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'deleted' in data &&
+    (data as { deleted?: unknown }).deleted === true
+  );
+}
+
+function parseFileName(content: string): string {
+  return content.split('|')[0] || 'File';
+}
 
 function isSameDay(a: string, b: string): boolean {
   const da = new Date(a);
@@ -28,6 +49,7 @@ function isSameDay(a: string, b: string): boolean {
 export function ChatRoom() {
   const currentRoom = useChatStore((s) => s.currentRoom);
   const addMessage = useChatStore((s) => s.addMessage);
+  const removeMessage = useChatStore((s) => s.removeMessage);
   const typingUsers = useChatStore((s) => s.typingUsers);
   const setTypingUser = useChatStore((s) => s.setTypingUser);
   const clearTypingUsers = useChatStore((s) => s.clearTypingUsers);
@@ -38,8 +60,15 @@ export function ChatRoom() {
     currentRoom?.id ?? null,
   );
 
+  const [viewerMessage, setViewerMessage] = useState<Message | null>(null);
+
   const handleWsMessage = useCallback(
     (data: unknown) => {
+      if (isDeletedEvent(data)) {
+        removeMessage(data.id);
+        setViewerMessage((prev) => (prev?.id === data.id ? null : prev));
+        return;
+      }
       const msg = data as Message;
       // Skip messages sent by the current user (already added via REST response)
       if (msg.userId === user?.id) return;
@@ -49,7 +78,7 @@ export function ChatRoom() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 50);
     },
-    [user?.id, addMessage],
+    [user?.id, addMessage, removeMessage],
   );
 
   const handleTyping = useCallback(
@@ -177,6 +206,25 @@ export function ChatRoom() {
     }
   };
 
+  const handleDeleteMessage = useCallback(
+    async (messageId: string) => {
+      if (!currentRoom) return;
+      try {
+        await api.delete(`/chats/${currentRoom.id}/messages/${messageId}`);
+        removeMessage(messageId);
+        setViewerMessage(null);
+      } catch (err: unknown) {
+        const axiosErr = err as { response?: { data?: { message?: string } } };
+        toast.error(axiosErr?.response?.data?.message ?? '메시지 삭제에 실패했습니다');
+      }
+    },
+    [currentRoom, removeMessage],
+  );
+
+  const handleOpenMedia = useCallback((msg: Message) => {
+    setViewerMessage(msg);
+  }, []);
+
   const rooms = useChatStore((s) => s.rooms);
   const isRestoring = !currentRoom && rooms.length === 0 && user && !!getLastRoomId(user.id);
 
@@ -276,6 +324,7 @@ export function ChatRoom() {
                   showTimestamp={showTimestamp}
                   readByCount={readReceipts[msg.id]?.length ?? 0}
                   roomType={currentRoom.type}
+                  onOpenMedia={handleOpenMedia}
                 />
               </div>
             </div>
@@ -288,6 +337,15 @@ export function ChatRoom() {
       </div>
 
       <MessageInput onSend={handleSend} onFileSend={handleFileSend} roomId={currentRoom?.id} />
+
+      <MediaViewerModal
+        open={!!viewerMessage}
+        fileUrl={viewerMessage?.fileUrl ?? ''}
+        fileName={viewerMessage ? parseFileName(viewerMessage.content) : ''}
+        canDelete={!!viewerMessage && viewerMessage.userId === user?.id}
+        onClose={() => setViewerMessage(null)}
+        onDelete={() => viewerMessage && handleDeleteMessage(viewerMessage.id)}
+      />
     </div>
   );
 }
