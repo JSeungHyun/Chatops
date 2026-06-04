@@ -12,7 +12,7 @@ function createMessage(overrides: Partial<Message> = {}): Message {
     userId: 'user-1',
     roomId: 'room-1',
     createdAt: '2025-05-05T10:00:00Z',
-    user: { id: 'user-1', email: 'test@test.com', nickname: 'TestUser', avatar: null },
+    user: { id: 'user-1', email: 'test@test.com', nickname: 'TestUser', avatar: undefined },
     ...overrides,
   };
 }
@@ -47,19 +47,31 @@ describe('MessageBubble - 파일/이미지 분기 렌더링', () => {
       expect(img).toHaveAttribute('src', message.thumbnailUrl);
     });
 
-    it('thumbnailUrl이 없으면 로딩 placeholder를 표시한다', () => {
+    it('thumbnailUrl이 없으면 원본 fileUrl로 폴백해 <img>를 렌더링한다', () => {
       const message = createMessage({
         type: 'IMAGE',
         content: 'photo.jpg|1024000',
         fileUrl: '/files/download/rooms/room-1/uuid/photo.jpg',
-        // thumbnailUrl 없음 — 아직 처리 중
+        // thumbnailUrl 없음 — 서버 thumbnail_url 미연동 시 원본으로 폴백해 즉시 표시
       });
 
       render(<MessageBubble message={message} {...defaultProps} />);
 
-      // img 태그가 없어야 하고, 로딩 상태가 표시되어야 함
+      const img = screen.getByRole('img');
+      expect(img).toBeInTheDocument();
+      expect(img).toHaveAttribute('src', message.fileUrl);
+    });
+
+    it('thumbnailUrl·fileUrl 둘 다 없을 때만 로딩 placeholder를 표시한다', () => {
+      const message = createMessage({
+        type: 'IMAGE',
+        content: 'photo.jpg|1024000',
+        // fileUrl/thumbnailUrl 모두 없음 — 업로드/전송 직전 상태
+      });
+
+      render(<MessageBubble message={message} {...defaultProps} />);
+
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
-      // 로딩 스피너 또는 placeholder 존재
       const placeholder = document.querySelector('[class*="animate"]');
       expect(placeholder).toBeInTheDocument();
     });

@@ -94,9 +94,10 @@ export const MessageBubble = memo(function MessageBubble({
               }
               onClick={() => onOpenMedia?.(message)}
             >
-              {message.thumbnailUrl ? (
+              {(message.thumbnailUrl || message.fileUrl) ? (
+                // 썸네일이 아직 없으면(서버 thumbnail_url 미연동) 원본 fileUrl로 폴백해 즉시 표시
                 <img
-                  src={message.thumbnailUrl}
+                  src={message.thumbnailUrl || message.fileUrl}
                   alt={fileInfo?.fileName || 'Image'}
                   className="h-full w-full object-cover transition-opacity duration-200"
                   loading="lazy"

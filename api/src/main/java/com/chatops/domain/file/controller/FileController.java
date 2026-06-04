@@ -10,10 +10,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.UriUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/files")
@@ -70,9 +72,12 @@ public class FileController {
     @GetMapping("/download/**")
     public ResponseEntity<Void> downloadFile(jakarta.servlet.http.HttpServletRequest request) {
         String fullPath = request.getRequestURI();
-        String objectKey = fullPath.substring(fullPath.indexOf("/files/download/") + "/files/download/".length());
+        String encodedKey = fullPath.substring(fullPath.indexOf("/files/download/") + "/files/download/".length());
+        // getRequestURI()는 인코딩된 경로를 반환한다. 디코딩해야 MinIO의 실제 객체명(원문)과 일치한다.
+        // (예: 한글/공백 파일명이 %ED%8F%AC.../%20 형태로 들어옴 → 미디코딩 시 NoSuchKey 404)
+        String objectKey = UriUtils.decode(encodedKey, StandardCharsets.UTF_8);
 
-        // Path traversal 방어
+        // Path traversal 방어 (디코딩 후 검사하여 %2e%2e 같은 인코딩 우회도 차단)
         if (objectKey.contains("..") || objectKey.startsWith("/")) {
             return ResponseEntity.badRequest().build();
         }
